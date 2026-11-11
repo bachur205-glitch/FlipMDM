@@ -9,7 +9,6 @@
          Delete that line once everything works the way you want. -->
     <application
         android:label="Flip MDM"
-        android:testOnly="true"
         android:theme="@android:style/Theme.DeviceDefault"
         tools:ignore="HardcodedDebugMode">
 
