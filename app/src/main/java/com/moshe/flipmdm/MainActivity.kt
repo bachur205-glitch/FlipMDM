@@ -248,20 +248,18 @@ class MainActivity : Activity() {
 
     private fun resetProtectionSection() {
         title("Recovery-mode reset protection")
-        val supported = try {
-            dpm.isFactoryResetProtectionPolicySupported
-        } catch (e: Exception) {
-            false
-        }
-        if (!supported) {
+        // Android throws UnsupportedOperationException on phones without FRP support.
+        val current = try {
+            dpm.getFactoryResetProtectionPolicy(admin)
+        } catch (e: UnsupportedOperationException) {
             note(
                 "This phone doesn't support reset protection, so a reset from " +
                 "recovery mode can't be locked."
             )
             return
+        } catch (e: Exception) {
+            null
         }
-
-        val current = try { dpm.getFactoryResetProtectionPolicy(admin) } catch (e: Exception) { null }
         val accounts = current?.factoryResetProtectionAccounts.orEmpty()
         val isOn = current?.isFactoryResetProtectionEnabled == true && accounts.isNotEmpty()
         note(if (isOn) "Status: ON (account ID ${accounts.joinToString()})" else "Status: OFF")
