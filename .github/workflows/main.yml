@@ -1,0 +1,67 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Use real google-services.json (if provided)
+        # Optional: keep your real Firebase config in a repo secret named
+        # GOOGLE_SERVICES_JSON instead of committing it. If the secret is empty,
+        # the committed placeholder is used and the app just builds/runs offline.
+        env:
+          GS: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GS" ]; then
+            echo "$GS" > app/google-services.json
+            echo "Using google-services.json from secret."
+          else
+            echo "No secret set — using the committed placeholder."
+          fi
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle 8.7
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+
+      - name: Build debug APK
+        run: gradle assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FlipMDM-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+  # Publishes the dashboard/ folder to GitHub Pages.
+  # Enable Pages once: repo Settings > Pages > Source = "GitHub Actions".
+  dashboard:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dashboard
+      - id: deploy
+        uses: actions/deploy-pages@v4
