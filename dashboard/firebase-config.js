@@ -7,9 +7,9 @@
 // the database security rules (see ../database.rules.json), not by hiding this file.
 
 export const firebaseConfig = {
-  apiKey: "PASTE_API_KEY",
-  authDomain: "your-project.firebaseapp.com",
-  databaseURL: "https://your-project-default-rtdb.firebaseio.com",
-  projectId: "your-project",
-  appId: "PASTE_APP_ID"
+  apiKey: "AIza…",
+  authDomain: "yourproject.firebaseapp.com",
+  databaseURL: "https://yourproject-default-rtdb.firebaseio.com",
+  projectId: "yourproject",
+  appId: "1:…:web:…"
 };
