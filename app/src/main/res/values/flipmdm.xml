@@ -4,7 +4,7 @@
       Remote control configuration.
 
       Paste your Firebase Realtime Database URL here to turn remote control ON,
-      e.g. https://your-project-default-rtdb.firebaseio.com
+      https://flipmdm-default-rtdb.firebaseio.com
       (Firebase console > Realtime Database > the URL shown at the top.)
 
       Leave it EMPTY to keep the phone fully local (no network, no dashboard).
