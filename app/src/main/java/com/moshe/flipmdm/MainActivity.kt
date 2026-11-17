@@ -1,20 +1,22 @@
 package com.moshe.flipmdm
 
+import android.accounts.AccountManager
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.admin.DevicePolicyManager
 import android.app.admin.FactoryResetProtectionPolicy
 import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.UserManager
 import android.text.InputType
 import android.webkit.WebView
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.CompoundButton
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -27,26 +29,8 @@ import android.widget.Toast
  */
 class MainActivity : Activity() {
 
-    private val restrictions = listOf(
-        UserManager.DISALLOW_INSTALL_APPS to "Block installing apps",
-        UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES to "Block APK sideloading",
-        UserManager.DISALLOW_UNINSTALL_APPS to "Block uninstalling apps",
-        UserManager.DISALLOW_FACTORY_RESET to "Block factory reset (Settings + reset codes)",
-        UserManager.DISALLOW_SAFE_BOOT to "Block safe mode",
-        UserManager.DISALLOW_ADD_USER to "Block adding users",
-        UserManager.DISALLOW_MODIFY_ACCOUNTS to "Block adding accounts",
-        UserManager.DISALLOW_CONFIG_DATE_TIME to "Block changing date/time",
-        UserManager.DISALLOW_DEBUGGING_FEATURES to "Block USB debugging (also blocks adb reboot recovery)",
-    )
-
-    /** Packages that would break the phone if hidden. */
-    private val protectedPackages = mutableSetOf(
-        "android",
-        "com.android.systemui",
-        "com.android.phone",
-        "com.android.providers.telephony",
-        "com.android.shell",
-    )
+    // Shared with the remote client and the web dashboard (see Restrictions.kt).
+    private val restrictions get() = Restrictions.all
 
     /** Packages that provide in-app browsers (WebView) and Custom Tabs (Chrome). */
     private val browserEngineCandidates = listOf(
@@ -65,6 +49,9 @@ class MainActivity : Activity() {
         "12580369", "22558463", "7378423", "232338", "232339",
     )
 
+    /** Extra packages that must never be hidden (home screen, dialer, this app). */
+    private val protectedPackages = mutableSetOf<String>()
+
     private lateinit var dpm: DevicePolicyManager
     private lateinit var admin: ComponentName
     private lateinit var root: LinearLayout
@@ -74,7 +61,6 @@ class MainActivity : Activity() {
         dpm = getSystemService(DevicePolicyManager::class.java)
         admin = AdminReceiver.component(this)
 
-        // Never allow hiding the home screen app or the dialer.
         packageManager.resolveActivity(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME), 0
         )?.activityInfo?.packageName?.let { protectedPackages.add(it) }
@@ -88,6 +74,8 @@ class MainActivity : Activity() {
             setPadding(12, 12, 12, 12)
         }
         setContentView(ScrollView(this).apply { addView(root) })
+
+        if (dpm.isDeviceOwnerApp(packageName)) GuardService.start(this)
 
         when {
             !dpm.isDeviceOwnerApp(packageName) -> showNotDeviceOwner()
@@ -136,6 +124,62 @@ class MainActivity : Activity() {
             .loadLabel(packageManager).toString()
     } catch (e: PackageManager.NameNotFoundException) {
         pkg
+    }
+
+    private fun isProtected(pkg: String) =
+        pkg in protectedPackages || BootSafe.isCore(this, pkg)
+
+    private fun hiddenPackages(): List<String> =
+        packageManager.getInstalledApplications(PackageManager.MATCH_UNINSTALLED_PACKAGES)
+            .map { it.packageName }
+            .filter { dpm.isApplicationHidden(admin, it) }
+
+    /** A checkbox that hides/shows one app, with a warning before hiding a system app. */
+    private fun hideCheckBox(pkg: String, text: String): CheckBox {
+        val box = CheckBox(this)
+        box.text = text
+        box.textSize = 13f
+        box.isChecked = dpm.isApplicationHidden(admin, pkg)
+
+        val listener = object : CompoundButton.OnCheckedChangeListener {
+            override fun onCheckedChanged(b: CompoundButton, on: Boolean) {
+                val l = this
+                if (on && BootSafe.isSystem(this@MainActivity, pkg)) {
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("Hide a system app?")
+                        .setMessage(
+                            "${labelOf(pkg)} came with the phone. Hiding it can break other " +
+                            "parts of the phone. If anything stops working, un-hide it. " +
+                            "It will be shown briefly during each restart so the phone can start."
+                        )
+                        .setPositiveButton("Hide") { _, _ -> applyHide(b, pkg, true, l) }
+                        .setNegativeButton("Cancel") { _, _ -> setSilently(b, false, l) }
+                        .setOnCancelListener { setSilently(b, false, l) }
+                        .show()
+                } else {
+                    applyHide(b, pkg, on, l)
+                }
+            }
+        }
+        box.setOnCheckedChangeListener(listener)
+        return box
+    }
+
+    private fun setSilently(
+        b: CompoundButton, value: Boolean, l: CompoundButton.OnCheckedChangeListener
+    ) {
+        b.setOnCheckedChangeListener(null)
+        b.isChecked = value
+        b.setOnCheckedChangeListener(l)
+    }
+
+    private fun applyHide(
+        b: CompoundButton, pkg: String, hide: Boolean, l: CompoundButton.OnCheckedChangeListener
+    ) {
+        if (!BootSafe.setHidden(this, pkg, hide)) {
+            toast("Couldn't change ${labelOf(pkg)}")
+            setSilently(b, !hide, l)
+        }
     }
 
     // ---------- screens ----------
@@ -193,19 +237,28 @@ class MainActivity : Activity() {
                 setOnCheckedChangeListener { _, on ->
                     if (on) dpm.addUserRestriction(admin, key)
                     else dpm.clearUserRestriction(admin, key)
+                    Remote.heartbeat(this@MainActivity)
                 }
             })
         }
 
         browserSection()
         resetProtectionSection()
+        remoteSection()
+
+        title("Hidden right now")
+        val hidden = hiddenPackages()
+        note(
+            if (hidden.isEmpty()) "Nothing is hidden."
+            else hidden.map { labelOf(it) }.sortedBy { it.lowercase() }.joinToString("\n")
+        )
+
+        title("Apps")
+        button("Hide / show apps") { showApps(showAll = false) }
 
         title("Secret dialer codes")
         note("Find the apps that respond to *#*#...#*#* codes and hide the risky ones.")
         button("Scan secret codes") { showSecretCodes() }
-
-        title("Apps")
-        button("Hide / show apps") { showApps(showAll = false) }
 
         title("PIN")
         button("Change PIN") { showSetPin() }
@@ -218,8 +271,10 @@ class MainActivity : Activity() {
 
     private fun browserEnginePackages(): List<String> {
         val all = browserEngineCandidates.toMutableSet()
-        WebView.getCurrentWebViewPackage()?.packageName?.let { all.add(it) }
-        return all.filter { isInstalled(it) }
+        try {
+            WebView.getCurrentWebViewPackage()?.packageName?.let { all.add(it) }
+        } catch (_: Exception) {}
+        return all.filter { isInstalled(it) && !isProtected(it) }
     }
 
     private fun browserSection() {
@@ -233,28 +288,37 @@ class MainActivity : Activity() {
             text = "Block in-app browsers (hides WebView + Chrome)"
             isChecked = pkgs.all { dpm.isApplicationHidden(admin, it) }
             setOnCheckedChangeListener { _, on ->
-                val failed = pkgs.filter { !dpm.setApplicationHidden(admin, it, on) }
+                val failed = pkgs.filter { !BootSafe.setHidden(this@MainActivity, it, on) }
                 if (failed.isNotEmpty()) toast("Couldn't change: ${failed.joinToString()}")
             }
         })
         note(
             "Packages: ${pkgs.joinToString()}\n" +
-            "Apps that rely on an in-app browser may show errors or close. " +
-            "Test the apps you need after turning this on."
+            "These are shown briefly during each restart so the phone can start, " +
+            "then hidden again. Apps that rely on an in-app browser may show errors."
         )
     }
 
-    // ---------- factory reset protection (recovery mode) ----------
+    // ---------- factory reset protection (recovery mode), tied to a Google account ----------
 
     private fun resetProtectionSection() {
-        title("Recovery-mode reset protection")
-        // Android throws UnsupportedOperationException on phones without FRP support.
+        title("Recovery-mode reset protection (FRP)")
+
+        // As device owner we can grant ourselves account access for the picker below.
+        try {
+            dpm.setPermissionGrantState(
+                admin, packageName, "android.permission.GET_ACCOUNTS",
+                DevicePolicyManager.PERMISSION_GRANT_STATE_GRANTED
+            )
+        } catch (_: Exception) {}
+
+        // Phones without FRP support throw UnsupportedOperationException.
         val current = try {
             dpm.getFactoryResetProtectionPolicy(admin)
         } catch (e: UnsupportedOperationException) {
             note(
                 "This phone doesn't support reset protection, so a reset from " +
-                "recovery mode can't be locked."
+                "recovery mode can't be locked to an account."
             )
             return
         } catch (e: Exception) {
@@ -262,43 +326,121 @@ class MainActivity : Activity() {
         }
         val accounts = current?.factoryResetProtectionAccounts.orEmpty()
         val isOn = current?.isFactoryResetProtectionEnabled == true && accounts.isNotEmpty()
-        note(if (isOn) "Status: ON (account ID ${accounts.joinToString()})" else "Status: OFF")
+        val email = frpEmail()
+        note(
+            if (isOn) "Status: ON" + (email?.let { " ($it)" } ?: "") +
+                "\nAccount ID(s): ${accounts.joinToString()}"
+            else "Status: OFF"
+        )
         note(
             "When this is on, after ANY reset (including from recovery mode) the phone " +
             "won't finish setup until someone signs in to this Google account."
         )
 
+        // Easiest path: pick a Google account already on the phone and let the app
+        // look up the ID that FRP needs.
+        val googleAccounts = try {
+            AccountManager.get(this).getAccountsByType("com.google").map { it.name }
+        } catch (e: Exception) {
+            emptyList()
+        }
+        if (googleAccounts.isEmpty()) {
+            note("No Google account found on this phone. Add one in Settings, or enter an ID below.")
+        } else {
+            note("Lock to a Google account on this phone:")
+            for (name in googleAccounts) {
+                button("Use: $name") { resolveAndEnableFrp(name) }
+            }
+        }
+
+        // Fallback: type the numeric account ID in by hand.
         val field = EditText(this).apply {
-            hint = "Google account ID (numbers only)"
+            hint = "…or paste the account ID (numbers)"
             inputType = InputType.TYPE_CLASS_NUMBER
         }.also { root.addView(it) }
-
-        button("Turn on reset protection") {
+        button("Turn on with this ID") {
             val id = field.text.toString().trim()
-            if (id.isEmpty()) {
-                toast("Enter the Google account ID first")
-                return@button
-            }
-            try {
-                dpm.setFactoryResetProtectionPolicy(
-                    admin,
-                    FactoryResetProtectionPolicy.Builder()
-                        .setFactoryResetProtectionAccounts(listOf(id))
-                        .setFactoryResetProtectionEnabled(true)
-                        .build()
-                )
-                toast("Reset protection is on")
-            } catch (e: Exception) {
-                toast("Failed: ${e.message}")
-            }
-            showDashboard()
+            if (id.isEmpty()) toast("Enter the account ID first")
+            else enableFrp(listOf(id), null)
         }
+        note(
+            "No ID? Sign in to the account at myaccount.google.com, open " +
+            "developers.google.com/people/api/rest/v1/people/get, call people/me, and copy " +
+            "the number after \"people/\" in the response."
+        )
+
         if (isOn) {
             button("Turn off reset protection") {
                 try { dpm.setFactoryResetProtectionPolicy(admin, null) } catch (_: Exception) {}
+                saveFrpEmail(null)
+                Remote.heartbeat(this)
                 showDashboard()
             }
         }
+    }
+
+    private fun resolveAndEnableFrp(email: String) {
+        toast("Looking up the account ID…")
+        Thread {
+            @Suppress("DEPRECATION")
+            val id = try {
+                com.google.android.gms.auth.GoogleAuthUtil.getAccountId(this, email)
+            } catch (e: Exception) {
+                null
+            }
+            runOnUiThread {
+                if (id.isNullOrBlank())
+                    toast("Couldn't get the ID automatically. Enter it by hand below.")
+                else
+                    enableFrp(listOf(id), email)
+            }
+        }.start()
+    }
+
+    private fun enableFrp(ids: List<String>, email: String?) {
+        try {
+            dpm.setFactoryResetProtectionPolicy(
+                admin,
+                FactoryResetProtectionPolicy.Builder()
+                    .setFactoryResetProtectionAccounts(ids)
+                    .setFactoryResetProtectionEnabled(true)
+                    .build()
+            )
+            saveFrpEmail(email)
+            toast("Reset protection is on")
+        } catch (e: Exception) {
+            toast("Failed: ${e.message}")
+        }
+        Remote.heartbeat(this)
+        showDashboard()
+    }
+
+    private fun saveFrpEmail(e: String?) =
+        getSharedPreferences("mdm", Context.MODE_PRIVATE).edit().apply {
+            if (e == null) remove("frp_email") else putString("frp_email", e)
+        }.apply()
+
+    private fun frpEmail(): String? =
+        getSharedPreferences("mdm", Context.MODE_PRIVATE).getString("frp_email", null)
+
+    // ---------- remote web dashboard ----------
+
+    private fun remoteSection() {
+        title("Remote control")
+        if (!Remote.isConfigured(this)) {
+            note(
+                "Off. To control this phone from the web dashboard, set up Firebase and put " +
+                "your database URL in app/src/main/res/values/flipmdm.xml, then rebuild. " +
+                "See the README."
+            )
+            return
+        }
+        note(
+            "Device ID: ${Remote.deviceId(this)}\n" +
+            "This is the phone's row in the dashboard. Open the dashboard, sign in with " +
+            "Google, and this phone appears within a minute."
+        )
+        button("Send status now") { Remote.heartbeat(this); toast("Status sent") }
     }
 
     // ---------- secret dialer codes ----------
@@ -343,24 +485,16 @@ class MainActivity : Activity() {
             return
         }
         status.text =
-            "Checked = hidden (all its codes stop working). Look for names like " +
-            "Engineer Mode, Factory Test, MMI or Diagnostics. If you hide the app " +
-            "behind *#*#33284#*#*, that code will stop working too."
+            "Checked = hidden (all its codes stop working). Core system apps can't be " +
+            "hidden; for those, \"Block factory reset\" is what stops reset codes."
         for ((pkg, codes) in results) {
             val line = "${labelOf(pkg)}\n$pkg\n" +
                 codes.sorted().joinToString(", ") { "*#*#$it#*#*" }
-            if (pkg in protectedPackages) {
-                note("$line\n(Can't hide: the phone needs this app)")
-                continue
+            if (isProtected(pkg)) {
+                note("$line\n(Core system app — can't hide)")
+            } else {
+                root.addView(hideCheckBox(pkg, line))
             }
-            root.addView(CheckBox(this).apply {
-                text = line
-                textSize = 13f
-                isChecked = dpm.isApplicationHidden(admin, pkg)
-                setOnCheckedChangeListener { _, on ->
-                    if (!dpm.setApplicationHidden(admin, pkg, on)) toast("Couldn't change $pkg")
-                }
-            })
         }
     }
 
@@ -378,7 +512,7 @@ class MainActivity : Activity() {
         val apps = pm.getInstalledApplications(PackageManager.MATCH_UNINSTALLED_PACKAGES)
             .map { it.packageName to it.loadLabel(pm).toString() }
             .filter { (pkg, _) ->
-                pkg !in protectedPackages && (
+                !isProtected(pkg) && (
                     showAll ||
                     dpm.isApplicationHidden(admin, pkg) ||
                     pm.getLaunchIntentForPackage(pkg) != null
@@ -386,16 +520,7 @@ class MainActivity : Activity() {
             }
             .sortedBy { it.second.lowercase() }
 
-        for ((pkg, label) in apps) {
-            root.addView(CheckBox(this).apply {
-                text = "$label\n$pkg"
-                textSize = 13f
-                isChecked = dpm.isApplicationHidden(admin, pkg)
-                setOnCheckedChangeListener { _, on ->
-                    if (!dpm.setApplicationHidden(admin, pkg, on)) toast("Couldn't change $label")
-                }
-            })
-        }
+        for ((pkg, label) in apps) root.addView(hideCheckBox(pkg, "$label\n$pkg"))
     }
 
     // ---------- removal ----------
@@ -404,9 +529,8 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this)
             .setTitle("Remove MDM?")
             .setMessage(
-                "This clears every restriction, un-hides all apps, turns off reset " +
-                "protection, and removes device-owner control. To set it up again " +
-                "you'll need the adb command."
+                "This clears every restriction, un-hides all apps, and removes " +
+                "device-owner control. To set it up again you'll need the adb command."
             )
             .setPositiveButton("Remove") { _, _ -> release() }
             .setNegativeButton("Cancel", null)
@@ -416,13 +540,12 @@ class MainActivity : Activity() {
     @Suppress("DEPRECATION")
     private fun release() {
         for ((key, _) in restrictions) dpm.clearUserRestriction(admin, key)
-        packageManager.getInstalledApplications(PackageManager.MATCH_UNINSTALLED_PACKAGES)
-            .forEach {
-                if (dpm.isApplicationHidden(admin, it.packageName)) {
-                    dpm.setApplicationHidden(admin, it.packageName, false)
-                }
-            }
+        for (pkg in hiddenPackages()) dpm.setApplicationHidden(admin, pkg, false)
         try { dpm.setFactoryResetProtectionPolicy(admin, null) } catch (_: Exception) {}
+        saveFrpEmail(null)
+        BootSafe.clearAll(this)
+        Remote.stop()
+        stopService(Intent(this, GuardService::class.java))
         dpm.setUninstallBlocked(admin, packageName, false)
         Pin.clear(this)
         dpm.clearDeviceOwnerApp(packageName)

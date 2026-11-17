@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "flipmdm-placeholder",
+    "firebase_url": "https://flipmdm-placeholder-default-rtdb.firebaseio.com",
+    "storage_bucket": "flipmdm-placeholder.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": {
+          "package_name": "com.moshe.flipmdm"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyPlaceholder_Replace_With_Real_Key_0000"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,60 @@
+:root {
+  --bg: #0e1013;
+  --panel: #181b20;
+  --line: #2a2f37;
+  --text: #e8eaed;
+  --muted: #9aa3ad;
+  --accent: #4f8cff;
+  --ok: #2ecc71;
+  --off: #6b7280;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: #0e1013;
+  color: #e8eaed;
+  font: 15px/1.5 -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; border-bottom: 1px solid #2a2f37; background: #181b20;
+}
+header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .3px; }
+.wrap { max-width: 860px; margin: 0 auto; padding: 20px; }
+.card {
+  background: #181b20; border: 1px solid #2a2f37; border-radius: 12px;
+  padding: 16px 18px; margin-bottom: 16px;
+}
+.card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .6px;
+  color: #9aa3ad; margin: 0 0 12px; font-weight: 600; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; }
+.row + .row { border-top: 1px solid #22262d; }
+.muted { color: #9aa3ad; font-size: 13px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; margin-right: 7px; }
+.dot.on { background: #2ecc71; } .dot.off { background: #6b7280; }
+button {
+  font: inherit; color: #e8eaed; background: #262b33; border: 1px solid #343b45;
+  border-radius: 8px; padding: 8px 14px; cursor: pointer;
+}
+button:hover { background: #2e343d; }
+button.primary { background: #4f8cff; border-color: #4f8cff; color: #fff; }
+button.danger { background: #3a1d22; border-color: #7a2d36; color: #ff9aa6; }
+button:disabled { opacity: .5; cursor: default; }
+select, input, textarea {
+  font: inherit; color: #e8eaed; background: #0f1215; border: 1px solid #343b45;
+  border-radius: 8px; padding: 8px 10px; width: 100%;
+}
+textarea { resize: vertical; min-height: 58px; }
+label.sw { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+input[type=checkbox] { width: auto; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 20px; }
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat b { font-size: 18px; } .stat span { color: #9aa3ad; font-size: 12px; }
+.applist { max-height: 320px; overflow: auto; }
+.applist .row span.pkg { color: #6b7280; font-size: 11px; display: block; }
+.toolbar { display: flex; gap: 10px; flex-wrap: wrap; }
+.hidden { display: none; }
+#signin { text-align: center; padding: 80px 20px; }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: #262b33; color: #9aa3ad; }
+.badge.hid { background: #3a2a14; color: #e0a850; }
+a { color: #4f8cff; }

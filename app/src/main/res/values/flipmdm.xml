@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Remote control configuration.
+
+      Paste your Firebase Realtime Database URL here to turn remote control ON,
+      e.g. https://your-project-default-rtdb.firebaseio.com
+      (Firebase console > Realtime Database > the URL shown at the top.)
+
+      Leave it EMPTY to keep the phone fully local (no network, no dashboard).
+      You must also replace app/google-services.json with the real one from your
+      Firebase project, and enable Anonymous sign-in in Authentication.
+    -->
+    <string name="mdm_database_url"></string>
+</resources>

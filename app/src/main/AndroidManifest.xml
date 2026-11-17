@@ -4,11 +4,21 @@
 
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!-- Remote control (Firebase). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Lets the FRP screen list the Google accounts already on the phone. -->
+    <uses-permission android:name="android.permission.GET_ACCOUNTS" />
 
     <!-- testOnly="true" lets you remove device owner with adb while developing.
          Delete that line once everything works the way you want. -->
     <application
         android:label="Flip MDM"
+        android:testOnly="true"
         android:theme="@android:style/Theme.DeviceDefault"
         tools:ignore="HardcodedDebugMode">
 
@@ -32,6 +42,7 @@
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
             </intent-filter>
         </receiver>
+
         <receiver
             android:name=".SecretCodeReceiver"
             android:exported="true">
@@ -40,5 +51,22 @@
                 <data android:scheme="android_secret_code" android:host="636" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <service
+            android:name=".GuardService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the device bootable and syncs remote admin commands" />
+        </service>
     </application>
 </manifest>

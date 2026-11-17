@@ -17,6 +17,8 @@ object Pin {
 
     fun isSet(c: Context) = prefs(c).contains(KEY)
     fun set(c: Context, pin: String) = prefs(c).edit().putString(KEY, hash(pin)).apply()
+    /** Store an already-hashed PIN (used when the dashboard sends the hash, not the PIN). */
+    fun setHash(c: Context, hash: String) = prefs(c).edit().putString(KEY, hash).apply()
     fun check(c: Context, pin: String) = prefs(c).getString(KEY, null) == hash(pin)
     fun clear(c: Context) = prefs(c).edit().remove(KEY).apply()
 }

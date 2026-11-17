@@ -1,0 +1,16 @@
+{
+  "rules": {
+    "owners": {
+      ".read": "auth != null",
+      "$uid": {
+        ".write": "auth != null && (!root.child('owners').exists() || root.child('owners').child(auth.uid).exists())"
+      }
+    },
+    "devices": {
+      "$deviceId": {
+        ".read": "auth != null && (root.child('owners').child(auth.uid).exists() || data.child('deviceAuthUid').val() === auth.uid)",
+        ".write": "auth != null && (root.child('owners').child(auth.uid).exists() || !data.child('deviceAuthUid').exists() || data.child('deviceAuthUid').val() === auth.uid)"
+      }
+    }
+  }
+}

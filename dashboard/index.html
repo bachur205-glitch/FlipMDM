@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Flip MDM — Admin</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>Flip MDM — Admin</h1>
+    <div id="who" class="muted"></div>
+  </header>
+
+  <!-- Sign-in screen -->
+  <div id="signin" class="wrap">
+    <p class="muted">Sign in with the Google account that owns this dashboard.</p>
+    <button id="signinBtn" class="primary">Sign in with Google</button>
+  </div>
+
+  <!-- Main app -->
+  <div id="app" class="wrap hidden">
+    <div class="card">
+      <div class="row">
+        <select id="deviceSelect"></select>
+        <button id="signoutBtn">Sign out</button>
+      </div>
+      <div id="ownerNotice" class="muted hidden" style="margin-top:10px"></div>
+    </div>
+
+    <div id="devicePanel"></div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
