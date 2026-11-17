@@ -11,5 +11,5 @@
       You must also replace app/google-services.json with the real one from your
       Firebase project, and enable Anonymous sign-in in Authentication.
     -->
-    <string name="mdm_database_url"></string>
+        <string name="mdm_database_url">https://flipmdm-default-rtdb.firebaseio.com</string>
 </resources>
